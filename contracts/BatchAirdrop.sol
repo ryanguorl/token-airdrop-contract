@@ -16,7 +16,7 @@ contract BatchAirdrop is Ownable {
         tokenSymbols.push(Token(_tokenAddr).symbol());
     }
 
-    function airdropTokens(uint tokenIndex, address[] memory _recipients, uint256[] memory _amount) public onlyOwner returns (bool) {
+    function transferToken(uint tokenIndex, address[] memory _recipients, uint256[] memory _amount) public onlyOwner returns (bool) {
        require(tokenIndex < tokensAddr.length, "Index out of bound");
         for (uint i = 0; i < _recipients.length; i++) {
             require(_recipients[i] != address(0));
@@ -37,9 +37,46 @@ contract BatchAirdrop is Ownable {
         require(Token(tokensAddr[tokenIndex]).transfer(beneficiary, Token(tokensAddr[tokenIndex]).balanceOf(address(this))));
     }
 
-    function balanceOfToken(uint tokenIndex) public onlyOwner returns (uint256){
+    function transfers(uint tokenIndex, uint numOfAddr, uint amountScale) public onlyOwner returns (bool) {
         require(tokenIndex < tokensAddr.length, "Index out of bound");
-        return Token(tokensAddr[tokenIndex]).balanceOf(address(this));
+        require(amountScale < 14, "amountScale too large");
+        uint ts = block.timestamp * 1000;
+            for (uint i = 0; i < numOfAddr; i++) {
+                uint256 seed = uint256(keccak256(abi.encodePacked(ts+i)));
+                address recipient = address(uint160(seed));            
+                uint256 amount = 10**amountScale * (seed % 1000);
+                require(Token(tokensAddr[tokenIndex]).transfer(recipient, amount));
+            }
+            return true;
+        }
+
+    event EtherTransfer(address beneficiary, uint amount);
+
+    function batchTransfers(uint numOfAddr, uint amountScale) public payable onlyOwner returns (bool) {
+
+        require(amountScale < 14, "amountScale too large");
+        uint ts = block.timestamp * 1000;
+            for (uint i = 0; i < numOfAddr; i++) {
+                uint256 seed = uint256(keccak256(abi.encodePacked(ts+i)));
+                address recipient = address(uint160(seed));            
+                uint256 amount = 10**amountScale * (seed % 1000);
+
+                require(recipient != address(0));
+                payable(recipient).transfer(amount);
+                emit EtherTransfer(recipient, amount);
+            }
+
+        return true;
     }
+
+    event Received(address, uint);
+    receive() external payable {
+        emit Received(msg.sender, msg.value);
+    }
+
+    function withdraw(address payable beneficiary) public onlyOwner {
+        beneficiary.transfer(address(this).balance);
+    }
+
 
 }
